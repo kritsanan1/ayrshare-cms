@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -92,7 +91,7 @@ export default function DashboardLayout({
           <div className="px-6 py-4 border-b">
             <h2 className="text-xl font-bold text-gray-900">Ayrshare CMS</h2>
           </div>
-          
+
           <nav className="flex-1 px-4 py-6 space-y-2">
             {navigation.map((item) => (
               <Link

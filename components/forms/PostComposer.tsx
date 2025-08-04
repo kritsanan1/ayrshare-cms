@@ -1,34 +1,23 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/Textarea'
 import { Input } from '@/components/ui/Input'
 import { Calendar, Image, Video, FileText, Send, Clock, Save } from 'lucide-react'
-import { Platform, PostStatus } from '@prisma/client'
-
-export interface PostData {
-  content: string
-  mediaUrls: string[]
-  scheduledTime?: Date
-  platforms: Platform[]
-  status: PostStatus
-}
 
 export interface PostComposerProps {
-  initialData?: Partial<PostData>
-  onSubmit: (data: PostData) => Promise<void>
-  onSaveDraft: (data: PostData) => Promise<void>
-  isLoading?: boolean
-  connectedAccounts: Array<{
-    id: string
-    platform: Platform
-    accountName: string
-    isActive: boolean
-  }>
+  onPostCreated?: () => void
 }
 
-const platformLabels: Record<Platform, string> = {
+interface SocialAccount {
+  id: string
+  platform: string
+  accountName: string
+  isActive: boolean
+}
+
+const platformLabels: Record<string, string> = {
   FACEBOOK: 'Facebook',
   INSTAGRAM: 'Instagram', 
   TWITTER: 'Twitter',
@@ -39,7 +28,7 @@ const platformLabels: Record<Platform, string> = {
   PINTEREST: 'Pinterest'
 }
 
-const platformColors: Record<Platform, string> = {
+const platformColors: Record<string, string> = {
   FACEBOOK: 'bg-blue-500',
   INSTAGRAM: 'bg-pink-500',
   TWITTER: 'bg-sky-500',
@@ -50,28 +39,35 @@ const platformColors: Record<Platform, string> = {
   PINTEREST: 'bg-red-600'
 }
 
-export default function PostComposer({
-  initialData,
-  onSubmit,
-  onSaveDraft,
-  isLoading = false,
-  connectedAccounts
-}: PostComposerProps) {
-  const [content, setContent] = useState(initialData?.content || '')
-  const [mediaUrls, setMediaUrls] = useState<string[]>(initialData?.mediaUrls || [])
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(
-    initialData?.platforms || []
-  )
-  const [scheduledTime, setScheduledTime] = useState<string>(
-    initialData?.scheduledTime ? 
-    new Date(initialData.scheduledTime).toISOString().slice(0, 16) : ''
-  )
-  const [isScheduled, setIsScheduled] = useState(!!initialData?.scheduledTime)
+export default function PostComposer({ onPostCreated }: PostComposerProps) {
+  const [content, setContent] = useState('')
+  const [mediaUrls, setMediaUrls] = useState<string[]>([])
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
+  const [scheduledTime, setScheduledTime] = useState<string>('')
+  const [isScheduled, setIsScheduled] = useState(false)
+  const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragOver, setIsDragOver] = useState(false)
 
-  const handlePlatformToggle = (platform: Platform) => {
+  useEffect(() => {
+    fetchConnectedAccounts()
+  }, [])
+
+  const fetchConnectedAccounts = async () => {
+    try {
+      const response = await fetch('/api/social-accounts')
+      if (response.ok) {
+        const data = await response.json()
+        setConnectedAccounts(data.socialAccounts)
+      }
+    } catch (error) {
+      console.error('Error fetching connected accounts:', error)
+    }
+  }
+
+  const handlePlatformToggle = (platform: string) => {
     setSelectedPlatforms(prev => 
       prev.includes(platform) 
         ? prev.filter(p => p !== platform)
@@ -111,19 +107,46 @@ export default function PostComposer({
   }
 
   const handleSubmit = async (isDraft: boolean = false) => {
-    const postData: PostData = {
-      content,
-      mediaUrls,
-      scheduledTime: isScheduled && scheduledTime ? new Date(scheduledTime) : undefined,
-      platforms: selectedPlatforms,
-      status: isDraft ? PostStatus.DRAFT : 
-              (isScheduled ? PostStatus.SCHEDULED : PostStatus.PENDING)
-    }
+    if (!content.trim()) return
+    if (!isDraft && selectedPlatforms.length === 0) return
 
-    if (isDraft) {
-      await onSaveDraft(postData)
-    } else {
-      await onSubmit(postData)
+    setIsLoading(true)
+    try {
+      const postData = {
+        content,
+        mediaUrls,
+        scheduledTime: isScheduled && scheduledTime ? scheduledTime : undefined,
+        platforms: selectedPlatforms
+      }
+
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(postData)
+      })
+
+      if (response.ok) {
+        // Reset form
+        setContent('')
+        setMediaUrls([])
+        setSelectedPlatforms([])
+        setScheduledTime('')
+        setIsScheduled(false)
+        
+        if (onPostCreated) {
+          onPostCreated()
+        }
+      } else {
+        const error = await response.json()
+        alert(error.error || 'เกิดข้อผิดพลาดในการสร้างโพสต์')
+      }
+    } catch (error) {
+      console.error('Error creating post:', error)
+      alert('เกิดข้อผิดพลาดในการสร้างโพสต์')
+    } finally {
+      setIsLoading(false)
     }
   }
 
