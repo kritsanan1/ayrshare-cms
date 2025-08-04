@@ -6,9 +6,10 @@ import { z } from 'zod'
 
 const connectAccountSchema = z.object({
   platform: z.enum(['FACEBOOK', 'INSTAGRAM', 'TWITTER', 'LINKEDIN', 'TIKTOK', 'YOUTUBE', 'LINE', 'PINTEREST']),
-  accountName: z.string().min(1, 'ชื่อบัญชีต้องไม่ว่าง'),
-  accountId: z.string().min(1, 'ID บัญชีต้องไม่ว่าง'),
+  accountName: z.string().min(1, 'ชื่อบัญชีไม่สามารถเว้นว่างได้'),
+  accountId: z.string().min(1, 'ID บัญชีไม่สามารถเว้นว่างได้'),
   accessToken: z.string().optional(),
+  refreshToken: z.string().optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -18,14 +19,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'ไม่พบ token การยืนยันตัวตน' }, { status: 401 })
     }
 
-    const payload = verifyToken(token)
-    if (!payload) {
+    const decoded = verifyToken(token)
+    if (!decoded) {
       return NextResponse.json({ error: 'Token ไม่ถูกต้อง' }, { status: 401 })
     }
 
-    const socialAccounts = await prisma.socialAccount.findMany({
+    const accounts = await prisma.socialAccount.findMany({
       where: {
-        userId: payload.userId
+        userId: decoded.userId
       },
       select: {
         id: true,
@@ -34,20 +35,21 @@ export async function GET(request: NextRequest) {
         accountId: true,
         isActive: true,
         createdAt: true,
-        _count: {
-          select: {
-            posts: true
-          }
-        }
+        updatedAt: true
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: {
+        createdAt: 'desc'
+      }
     })
 
-    return NextResponse.json({ socialAccounts })
+    return NextResponse.json({ accounts })
 
   } catch (error) {
-    console.error('Get social accounts error:', error)
-    return NextResponse.json({ error: 'เกิดข้อผิดพลาดในการดึงข้อมูลบัญชีโซเชียล' }, { status: 500 })
+    console.error('Error fetching social accounts:', error)
+    return NextResponse.json(
+      { error: 'เกิดข้อผิดพลาดในการดึงข้อมูลบัญชีโซเชียล' },
+      { status: 500 }
+    )
   }
 }
 
@@ -58,54 +60,50 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'ไม่พบ token การยืนยันตัวตน' }, { status: 401 })
     }
 
-    const payload = verifyToken(token)
-    if (!payload) {
+    const decoded = verifyToken(token)
+    if (!decoded) {
       return NextResponse.json({ error: 'Token ไม่ถูกต้อง' }, { status: 401 })
     }
 
     const body = await request.json()
-    const { platform, accountName, accountId, accessToken } = connectAccountSchema.parse(body)
+    const { platform, accountName, accountId, accessToken, refreshToken } = connectAccountSchema.parse(body)
 
     // Check if account already exists
-    const existingAccount = await prisma.socialAccount.findUnique({
+    const existingAccount = await prisma.socialAccount.findFirst({
       where: {
-        userId_platform_accountId: {
-          userId: payload.userId,
-          platform,
-          accountId
-        }
+        userId: decoded.userId,
+        platform,
+        accountId
       }
     })
 
     if (existingAccount) {
       return NextResponse.json(
-        { error: 'บัญชีนี้ได้ถูกเชื่อมต่อแล้ว' },
+        { error: 'บัญชีนี้ได้เชื่อมต่อแล้ว' },
         { status: 400 }
       )
     }
 
-    // Create social account
-    const socialAccount = await prisma.socialAccount.create({
+    const account = await prisma.socialAccount.create({
       data: {
         platform,
         accountName,
         accountId,
         accessToken,
-        userId: payload.userId
-      },
-      select: {
-        id: true,
-        platform: true,
-        accountName: true,
-        accountId: true,
-        isActive: true,
-        createdAt: true
+        refreshToken,
+        userId: decoded.userId
       }
     })
 
     return NextResponse.json({
-      message: 'เชื่อมต่อบัญชีโซเชียลสำเร็จ',
-      socialAccount
+      message: 'เชื่อมต่อบัญชีสำเร็จ',
+      account: {
+        id: account.id,
+        platform: account.platform,
+        accountName: account.accountName,
+        accountId: account.accountId,
+        isActive: account.isActive
+      }
     })
 
   } catch (error) {
@@ -116,7 +114,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.error('Connect social account error:', error)
-    return NextResponse.json({ error: 'เกิดข้อผิดพลาดในการเชื่อมต่อบัญชีโซเชียล' }, { status: 500 })
+    console.error('Error connecting social account:', error)
+    return NextResponse.json(
+      { error: 'เกิดข้อผิดพลาดในการเชื่อมต่อบัญชี' },
+      { status: 500 }
+    )
   }
 }
