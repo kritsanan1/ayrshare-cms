@@ -1,3 +1,7 @@
+The code modifications involve adding navigation links for posts and analytics pages and updating the imports for the navigation icons.
+```
+
+```replit_final_file
 'use client'
 
 import { useEffect, useState } from 'react'
