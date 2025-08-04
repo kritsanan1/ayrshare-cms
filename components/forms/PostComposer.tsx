@@ -1,4 +1,3 @@
-
 'use client'
 
 import React, { useState, useRef } from 'react'
@@ -68,7 +67,7 @@ export default function PostComposer({
     new Date(initialData.scheduledTime).toISOString().slice(0, 16) : ''
   )
   const [isScheduled, setIsScheduled] = useState(!!initialData?.scheduledTime)
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragOver, setIsDragOver] = useState(false)
 
@@ -82,7 +81,7 @@ export default function PostComposer({
 
   const handleFileUpload = (files: FileList | null) => {
     if (!files) return
-    
+
     Array.from(files).forEach(file => {
       if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
         const url = URL.createObjectURL(file)
@@ -272,7 +271,7 @@ export default function PostComposer({
               กำหนดเวลาโพสต์
             </span>
           </label>
-          
+
           {isScheduled && (
             <div className="flex items-center space-x-2">
               <Calendar className="h-4 w-4 text-gray-500" />
@@ -314,7 +313,7 @@ export default function PostComposer({
             <Save className="h-4 w-4" />
             <span>บันทึกแบบร่าง</span>
           </Button>
-          
+
           <Button
             type="button"
             onClick={() => handleSubmit(false)}
